@@ -1,0 +1,58 @@
+import "@cadl-lang/rest";
+
+using Cadl.Http;
+
+model BinaryResponse<T> {
+  @header contentType: T;
+  @body body: bytes;
+}
+
+alias FileResponse = BinaryResponse<"application/octet-stream">;
+
+model TextResponse {
+  @header contentType: "text/plain";
+  @body body: string;
+}
+
+model StreamResponse<Chunk, ContentType> {
+  @header contentType: ContentType;
+  @body @stream() body: Chunk[];
+}
+
+alias EventStream<EventType> = StreamResponse<EventType, "text/event-stream">;
+
+model CatEvent {
+  id: string;
+  event: "cat";
+  data: {
+    moew: boolean;
+  }
+}
+
+model DogEvent {
+  id: string;
+  event: "dog";
+  data: {
+    bark: boolean;
+  }
+}
+
+union PetEvent {cat: CatEvent, dog: DogEvent}
+
+model MyJsonPayload {
+  data: string;
+}
+
+@route("/stream")
+namespace Stream {
+  @get("file") op downloadFile(): FileResponse;
+  @get("png") op downloadPng(): BinaryResponse<"image/png">;
+
+  @get("text") op getText(): TextResponse;
+  
+  @get("event-stream") op getEventStream(): EventStream<PetEvent>;
+
+  @get("text-stream") op getTextStream(): StreamResponse<string, "application/octet-stream">;
+
+  @get("json-stream") op getJsonStream(): StreamResponse<MyJsonPayload, "application/json-seq">;
+}
