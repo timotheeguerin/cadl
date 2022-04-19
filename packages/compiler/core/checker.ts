@@ -3,6 +3,7 @@ import { compilerAssert, ProjectionError } from "./diagnostics.js";
 import {
   DecoratorContext,
   Expression,
+  IdentifierKind,
   isIntrinsic,
   JsSourceFileNode,
   NeverType,
@@ -14,7 +15,7 @@ import {
   VoidType,
 } from "./index.js";
 import { createDiagnostic, reportDiagnostic } from "./messages.js";
-import { hasParseError, visitChildren } from "./parser.js";
+import { getIdentifierContext, hasParseError, visitChildren } from "./parser.js";
 import { Program } from "./program.js";
 import { createProjectionMembers } from "./projectionMembers.js";
 import {
@@ -115,6 +116,7 @@ export interface Checker {
     projection: ProjectionNode,
     args?: (Type | string | number | boolean)[]
   ): Type;
+  resolveIdentifier(node: IdentifierNode): Sym | undefined;
   resolveCompletions(node: IdentifierNode): Map<string, CadlCompletionItem>;
   createType<T>(typeDef: T): T & TypePrototype;
   createAndFinishType<U extends Type extends any ? Omit<Type, keyof TypePrototype> : never>(
@@ -280,6 +282,7 @@ export function createChecker(program: Program): Checker {
     getMergedSymbol,
     mergeSourceFile,
     cloneType,
+    resolveIdentifier,
     resolveCompletions,
     evalProjection: evalProjectionStatement,
     project,
@@ -499,16 +502,16 @@ export function createChecker(program: Program): Checker {
         );
       }
     } else {
-      return (
-        templateInstantiation[index] ??
-        getResolvedTypeParameterDefault(links.declaredType as TemplateParameterType)
-      );
+      return templateInstantiation[index];
     }
 
     return type;
   }
 
-  function getResolvedTypeParameterDefault(declaredType: TemplateParameterType): Type | undefined {
+  function getResolvedTypeParameterDefault(
+    declaredType: TemplateParameterType,
+    existingValues: Record<string, Type>
+  ): Type | undefined {
     if (declaredType.default === undefined) {
       return undefined;
     }
@@ -516,7 +519,7 @@ export function createChecker(program: Program): Checker {
       return declaredType.default;
     }
     if (declaredType.default.kind === "TemplateParameter") {
-      return getTypeForNode(declaredType.default.node);
+      return existingValues[declaredType.default.node.id.sv];
     } else {
       return declaredType.default;
     }
@@ -536,7 +539,7 @@ export function createChecker(program: Program): Checker {
             program.reportDiagnostic(
               createDiagnostic({ code: "invalid-template-default", target: node })
             );
-            return errorType;
+            return undefined;
           }
         }
         return type;
@@ -544,14 +547,14 @@ export function createChecker(program: Program): Checker {
 
       visitChildren(node, (x) => {
         const visited = visit(x);
-        if (visited === errorType) {
+        if (visited === undefined) {
           hasError = true;
         }
       });
 
-      return hasError ? errorType : type;
+      return hasError ? undefined : type;
     }
-    return visit(nodeDefault);
+    return visit(nodeDefault) ?? errorType;
   }
 
   function checkTypeReference(
@@ -563,6 +566,67 @@ export function createChecker(program: Program): Checker {
     }
 
     return checkTypeReferenceSymbol(sym, node);
+  }
+
+  function checkTypeReferenceArgs(
+    node: TypeReferenceNode | MemberExpressionNode | IdentifierNode
+  ): Type[] {
+    const args: Type[] = [];
+    if (node.kind !== SyntaxKind.TypeReference) {
+      return args;
+    }
+
+    for (const arg of node.arguments) {
+      const value = getTypeForNode(arg);
+      args.push(value);
+    }
+    return args;
+  }
+
+  function checkTemplateInstantiationArgs(
+    node: Node,
+    args: Type[],
+    declarations: readonly TemplateParameterDeclarationNode[]
+  ): Type[] {
+    if (args.length > declarations.length) {
+      program.reportDiagnostic(
+        createDiagnostic({ code: "invalid-template-args", messageId: "tooMany", target: node })
+      );
+    }
+
+    const values: Type[] = [];
+    const valueMap: Record<string, Type> = {};
+    let tooFew = false;
+    for (let i = 0; i < declarations.length; i++) {
+      const declaration = declarations[i];
+
+      if (i < args.length) {
+        values.push(args[i]);
+        valueMap[declaration.id.sv] = args[i];
+      } else {
+        const declaredType = getTypeForNode(declaration)! as TemplateParameterType;
+        const defaultValue = getResolvedTypeParameterDefault(declaredType, valueMap);
+        if (defaultValue) {
+          values.push(defaultValue);
+          valueMap[declaration.id.sv] = defaultValue;
+        } else {
+          tooFew = true;
+          values.push(errorType);
+        }
+      }
+    }
+
+    if (tooFew) {
+      program.reportDiagnostic(
+        createDiagnostic({
+          code: "invalid-template-args",
+          messageId: "tooFew",
+          target: node,
+        })
+      );
+    }
+
+    return values;
   }
 
   function checkTypeReferenceSymbol(
@@ -587,7 +651,7 @@ export function createChecker(program: Program): Checker {
 
     const symbolLinks = getSymbolLinks(sym);
     let baseType;
-    let args = node.kind === SyntaxKind.TypeReference ? node.arguments.map(getTypeForNode) : [];
+    const args = checkTypeReferenceArgs(node);
     if (
       sym.flags &
       (SymbolFlags.Model | SymbolFlags.Alias | SymbolFlags.Interface | SymbolFlags.Union)
@@ -635,35 +699,8 @@ export function createChecker(program: Program): Checker {
         }
 
         const templateParameters = decl.templateParameters;
-        if (args.length < templateParameters.length) {
-          let tooFew = false;
-          for (let i = args.length; i < templateParameters.length; i++) {
-            if (!templateParameters[i].default) {
-              tooFew = true;
-              args.push(errorType);
-            }
-          }
-
-          if (tooFew) {
-            program.reportDiagnostic(
-              createDiagnostic({
-                code: "invalid-template-args",
-                messageId: "tooFew",
-                target: node,
-              })
-            );
-          }
-        } else if (args.length > templateParameters.length) {
-          program.reportDiagnostic(
-            createDiagnostic({
-              code: "invalid-template-args",
-              messageId: "tooMany",
-              target: node,
-            })
-          );
-          args = args.slice(0, templateParameters.length);
-        }
-        baseType = instantiateTemplate(decl, args);
+        const instantiationArgs = checkTemplateInstantiationArgs(node, args, templateParameters);
+        baseType = instantiateTemplate(decl, instantiationArgs);
       }
     } else {
       // some other kind of reference
@@ -763,7 +800,7 @@ export function createChecker(program: Program): Checker {
       const variant: UnionTypeVariant = createType({
         kind: "UnionVariant",
         type,
-        name: Symbol(),
+        name: Symbol("name"),
         decorators: [],
         node: undefined,
       });
@@ -800,6 +837,7 @@ export function createChecker(program: Program): Checker {
       name: "",
       properties: properties,
       decorators: [],
+      derivedModels: [],
     });
 
     for (const option of optionTypes) {
@@ -1053,14 +1091,57 @@ export function createChecker(program: Program): Checker {
     );
   }
 
+  function resolveIdentifier(id: IdentifierNode): Sym | undefined {
+    let sym: Sym | undefined;
+    const { node, kind } = getIdentifierContext(id);
+
+    switch (kind) {
+      case IdentifierKind.Declaration:
+        sym = getMergedSymbol(node.symbol);
+        break;
+      case IdentifierKind.Other:
+        return undefined;
+      case IdentifierKind.Decorator:
+      case IdentifierKind.Using:
+      case IdentifierKind.TypeReference:
+        let ref: MemberExpressionNode | IdentifierNode = id;
+        let resolveDecorator = kind === IdentifierKind.Decorator;
+        if (id.parent?.kind === SyntaxKind.MemberExpression) {
+          if (id.parent.id === id) {
+            // If the identifier is Y in X.Y, then resolve (X.Y).
+            ref = id.parent;
+          } else {
+            // If the identifier is X in X.Y then we are resolving a
+            // namespace, which is never a decorator.
+            resolveDecorator = false;
+          }
+        }
+        sym = resolveTypeReference(ref, resolveDecorator);
+        break;
+      default:
+        const _assertNever: never = kind;
+        compilerAssert(false, "Unreachable");
+    }
+
+    return sym?.symbolSource ?? sym;
+  }
+
   function resolveCompletions(identifier: IdentifierNode): Map<string, CadlCompletionItem> {
     const completions = new Map<string, CadlCompletionItem>();
-    const parent = findFirstNonMemberExpressionParent(identifier);
-    const resolveType = parent.kind === SyntaxKind.TypeReference;
-    const resolveDecorator = parent.kind === SyntaxKind.DecoratorExpression;
-    const resolveUsing = parent.kind === SyntaxKind.UsingStatement;
-    if (!resolveType && !resolveDecorator && !resolveUsing) {
-      return completions;
+    const { kind } = getIdentifierContext(identifier);
+
+    switch (kind) {
+      case IdentifierKind.Using:
+      case IdentifierKind.Decorator:
+      case IdentifierKind.TypeReference:
+        break; // supported
+      case IdentifierKind.Other:
+        return completions; // not implemented
+      case IdentifierKind.Declaration:
+        return completions; // cannot complete, name can be chosen arbitrarily
+      default:
+        const _assertNever: never = kind;
+        compilerAssert(false, "Unreachable");
     }
 
     if (identifier.parent && identifier.parent.kind === SyntaxKind.MemberExpression) {
@@ -1098,20 +1179,6 @@ export function createChecker(program: Program): Checker {
 
     return completions;
 
-    function findFirstNonMemberExpressionParent(identifier: IdentifierNode) {
-      for (let node = identifier.parent; node; node = node.parent) {
-        if (node.kind !== SyntaxKind.MemberExpression) {
-          return node;
-        }
-      }
-
-      compilerAssert(
-        false,
-        "Shouldn't have an identifier with only member expression parents all the way to the root.",
-        identifier
-      );
-    }
-
     function addCompletions(table: SymbolTable | undefined) {
       if (!table) {
         return;
@@ -1147,23 +1214,31 @@ export function createChecker(program: Program): Checker {
     }
 
     function shouldAddCompletion(sym: Sym): boolean {
-      if (resolveDecorator) {
-        // Only return decorators and namespaces when completing decorator
-        return !!(sym.flags & (SymbolFlags.Decorator | SymbolFlags.Namespace));
+      switch (kind) {
+        case IdentifierKind.Decorator:
+          // Only return decorators and namespaces when completing decorator
+          return !!(sym.flags & (SymbolFlags.Decorator | SymbolFlags.Namespace));
+        case IdentifierKind.Using:
+          // Only return namespaces when completing using
+          return !!(sym.flags & SymbolFlags.Namespace);
+        case IdentifierKind.TypeReference:
+          // Do not return functions or decorators when completing types
+          return !(sym.flags & (SymbolFlags.Function | SymbolFlags.Decorator));
+        default:
+          compilerAssert(false, "We should have bailed up-front on other kinds.");
       }
-      if (resolveUsing) {
-        // Only return namespaces when completing using
-        return !!(sym.flags & SymbolFlags.Namespace);
-      }
-      if (resolveType) {
-        // Do not return functions when completing types
-        return !(sym.flags & SymbolFlags.Function);
-      }
-      compilerAssert(false, "Unreachable.");
     }
   }
 
-  function resolveIdentifier(node: IdentifierNode, resolveDecorator = false): Sym | undefined {
+  function resolveIdentifierInScope(
+    node: IdentifierNode,
+    resolveDecorator = false
+  ): Sym | undefined {
+    compilerAssert(
+      node.parent?.kind !== SyntaxKind.MemberExpression || node.parent.id !== node,
+      "This function should not be used to resolve Y in member expression X.Y. Use resolveIdentifier() to resolve an arbitrary identifier."
+    );
+
     if (hasParseError(node)) {
       // Don't report synthetic identifiers used for parser error recovery.
       // The parse error is the root cause and will already have been logged.
@@ -1300,7 +1375,7 @@ export function createChecker(program: Program): Checker {
     }
 
     if (node.kind === SyntaxKind.Identifier) {
-      const sym = resolveIdentifier(node, resolveDecorator);
+      const sym = resolveIdentifierInScope(node, resolveDecorator);
       if (!sym) return undefined;
 
       return sym.flags & SymbolFlags.Using ? sym.symbolSource : sym;
@@ -1366,6 +1441,7 @@ export function createChecker(program: Program): Checker {
       properties: new Map<string, ModelTypeProperty>(),
       namespace: getParentNamespaceType(node),
       decorators,
+      derivedModels: [],
     });
     if (!instantiatingThisTemplate) {
       links.declaredType = type;
@@ -1393,6 +1469,10 @@ export function createChecker(program: Program): Checker {
       type.baseModel = isBase.baseModel;
     } else if (node.extends) {
       type.baseModel = checkClassHeritage(node, node.extends);
+    }
+
+    if (type.baseModel) {
+      type.baseModel.derivedModels.push(type);
     }
 
     // Hold on to the model type that's being defined so that it
@@ -1434,6 +1514,7 @@ export function createChecker(program: Program): Checker {
       node: node,
       properties,
       decorators: [],
+      derivedModels: [],
     });
     checkModelProperties(node, properties, type);
     return finishType(type);
@@ -1637,6 +1718,9 @@ export function createChecker(program: Program): Checker {
   }
 
   function checkDefault(defaultType: Type, type: Type): Type {
+    if (isErrorType(type)) {
+      return errorType;
+    }
     switch (type.kind) {
       case "Model":
         return checkDefaultForModelType(defaultType, type);
@@ -2437,6 +2521,7 @@ export function createChecker(program: Program): Checker {
       node: node,
       decorators: [],
       properties: new Map(),
+      derivedModels: [],
     });
 
     for (const propNode of node.properties) {

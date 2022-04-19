@@ -1,4 +1,11 @@
-import { CadlPrettierPlugin, compile, getSourceLocation } from "@cadl-lang/compiler";
+import {
+  CadlPrettierPlugin,
+  compile,
+  DiagnosticTarget,
+  getSourceLocation,
+  MANIFEST,
+  NoTarget,
+} from "@cadl-lang/compiler";
 import debounce from "debounce";
 import lzutf8 from "lzutf8";
 import * as monaco from "monaco-editor";
@@ -60,6 +67,9 @@ export async function createUI(host: BrowserHost) {
   document.getElementById("share")?.addEventListener("click", saveCode);
   document.getElementById("newIssue")?.addEventListener("click", newIssue);
 
+  document.getElementById("cadl-version")!.innerHTML = MANIFEST.version;
+  document.getElementById("cadl-commit")!.innerHTML = MANIFEST.commit.slice(0, 6);
+
   initSamples();
   await doCompile();
 
@@ -101,6 +111,32 @@ export async function createUI(host: BrowserHost) {
       await host.unlink(path);
     }
   }
+
+  function getMarkerLocation(
+    target: DiagnosticTarget | typeof NoTarget
+  ): Pick<
+    monaco.editor.IMarkerData,
+    "startLineNumber" | "startColumn" | "endLineNumber" | "endColumn"
+  > {
+    const loc = getSourceLocation(target);
+    if (loc === undefined || loc.file.path != "/test/main.cadl") {
+      return {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 1,
+      };
+    }
+    const start = loc.file.getLineAndCharacterOfPosition(loc.pos);
+    const end = loc.file.getLineAndCharacterOfPosition(loc.end);
+    return {
+      startLineNumber: start.line + 1,
+      startColumn: start.character + 1,
+      endLineNumber: end.line + 1,
+      endColumn: end.character + 1,
+    };
+  }
+
   async function doCompile() {
     await host.writeFile("main.cadl", mainModel.getValue());
     await emptyOutputDir();
@@ -109,22 +145,11 @@ export async function createUI(host: BrowserHost) {
       swaggerOutputFile: "cadl-output/openapi.json",
       emitters: ["@cadl-lang/openapi3"],
     });
-    const markers: monaco.editor.IMarkerData[] = [];
-    for (const diag of program.diagnostics) {
-      const loc = getSourceLocation(diag.target);
-      if (!loc) continue;
-      const start = loc.file.getLineAndCharacterOfPosition(loc.pos);
-      const end = loc.file.getLineAndCharacterOfPosition(loc.end);
-
-      markers.push({
-        startLineNumber: start.line + 1,
-        startColumn: start.character + 1,
-        endLineNumber: end.line + 1,
-        endColumn: end.character + 1,
-        message: diag.message,
-        severity: monaco.MarkerSeverity.Error,
-      });
-    }
+    const markers: monaco.editor.IMarkerData[] = program.diagnostics.map((diag) => ({
+      ...getMarkerLocation(diag.target),
+      message: diag.message,
+      severity: monaco.MarkerSeverity.Error,
+    }));
 
     monaco.editor.setModelMarkers(mainModel, "owner", markers);
 
