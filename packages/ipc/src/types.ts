@@ -14,3 +14,21 @@ export interface PropertyAccessRequest {
    */
   key: string;
 }
+
+export interface ObjectMember {
+  name: string;
+  type: "method" | "property";
+}
+
+export interface ObjectMetaType {
+  type: "object";
+  id: number;
+  members: ObjectMember[];
+}
+
+export interface ValueMetaType {
+  type: "value";
+  value: any;
+}
+
+export type MetaType = ObjectMetaType | ValueMetaType;
