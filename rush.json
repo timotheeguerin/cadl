@@ -133,6 +133,12 @@
       "shouldPublish": true
     },
     {
+      "packageName": "@cadl-lang/ipc",
+      "projectFolder": "packages/ipc",
+      "reviewCategory": "production",
+      "shouldPublish": true
+    },
+    {
       "packageName": "@cadl-lang/playground",
       "projectFolder": "packages/playground",
       "reviewCategory": "production",
