@@ -9,12 +9,10 @@ export async function $onEmit(program: Program) {
   });
   cp.stderr.pipe(process.stderr);
 
-  cp.stdout.on("data", (e) => {
-    console.error("Stdout:", e.toString());
-  });
   cp.stdin.on("data", (e) => {
     console.error("Stdin:", e.toString());
   });
   const connection = createIpcConnection(cp);
-  await connection.sendRequest("test", { a: 1, b: 3 });
+  await connection.sendRequest("onEmit", { program: connection.ipcify(program) });
+  cp.kill();
 }

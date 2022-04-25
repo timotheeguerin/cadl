@@ -1,4 +1,16 @@
 export interface CadlIpcConnection {
-  sendNotification(name: string, value: unknown): void;
-  sendRequest(name: string, value: unknown): any;
+  sendRequest(name: string, value: unknown): Promise<unknown>;
+  ipcify(obj: unknown): any;
+}
+
+export interface PropertyAccessRequest {
+  /**
+   * Id of the object to access.
+   */
+  objectId: number;
+
+  /**
+   * Name of the key to access.
+   */
+  key: string;
 }
