@@ -29,6 +29,11 @@ export interface MethodCallRequest {
    * Name of the method to access.
    */
   key: string;
+
+  /**
+   * Method args
+   */
+  args: MetaType[];
 }
 
 export interface ImportModuleRequest {
@@ -46,9 +51,14 @@ export interface ObjectMetaType {
   members: ObjectMember[];
 }
 
+export interface ArrayMetaType {
+  type: "array";
+  items: MetaType[];
+}
+
 export interface ValueMetaType {
   type: "value";
   value: any;
 }
 
-export type MetaType = ObjectMetaType | ValueMetaType;
+export type MetaType = ObjectMetaType | ValueMetaType | ArrayMetaType;

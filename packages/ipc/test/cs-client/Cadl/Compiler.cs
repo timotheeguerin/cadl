@@ -7,7 +7,7 @@ public class RemoteBaseType {
     Proxy = proxy;
   }
 
-  protected IpcProxyObject Proxy { get; }
+  public IpcProxyObject Proxy { get; }
 }
 
 public class Program : RemoteBaseType {

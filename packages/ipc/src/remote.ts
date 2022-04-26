@@ -34,7 +34,16 @@ export function createRemoteAccessor(connection: MessageConnection): RemoteAcces
 
   connection.onRequest(RemoteRequests.MethodCall, async (req: MethodCallRequest) => {
     const object = ensureObject(req.objectId);
-    const result = await object[req.key]();
+    const args = req.args.map((x) => {
+      switch (x.type) {
+        case "value":
+          return x.value;
+        case "object":
+          return ensureObject(x.id);
+      }
+    });
+    const result = await object[req.key](...args);
+    console.log("args", result);
     return valueToMeta(result);
   });
 
@@ -57,16 +66,19 @@ export function createRemoteAccessor(connection: MessageConnection): RemoteAcces
         if (value === null) {
           return { type: "value", value: null };
         }
+        if (Array.isArray(value)) {
+          return {
+            type: "array",
+            items: value.map((x) => valueToMeta(x)!),
+          };
+        }
         return objectToMeta(value);
       case "function":
         return undefined;
     }
   }
 
-  function objectToMeta(item: object): ObjectMetaType | undefined {
-    if (Array.isArray(item)) {
-      return undefined; // Todo implement array
-    }
+  function objectToMeta(item: Record<string, any>): ObjectMetaType {
     const id = objectRegistry.getIdFor(item);
     return {
       type: "object",
