@@ -30,29 +30,40 @@ internal class Server {
 
     // Log to STDERR so as to not corrupt the STDOUT pipe that we may be using for JSON-RPC.
     var programProxy = new Microsoft.Cadl.Compiler.Program(new IpcProxyObject(remote, program));
-    var options = programProxy.CompilerOptions;
-    var outputPath = options.OutputPath;
-    Console.Error.WriteLine($"OutputPath: {outputPath}");
-
-    var rest = new CadlRestLibrary(new IpcProxyObject(remote, await remote.ImportModuleAsync("@cadl-lang/rest")));
-    var result = await rest.GetAllRoutesAsync(programProxy);
-    Console.Error.WriteLine("Rest library:");
-    foreach (var member in result.Items) {
-      Console.Error.WriteLine($"  {member.Type}");
-    }
-
+    await new MyCadlExtension(remote).OnEmit(programProxy);
 
     return;
   }
 }
 
-public class IpcProxyObject {
+public class MyCadlExtension {
   private readonly CadlRemote remote;
+
+  public MyCadlExtension(CadlRemote remote) {
+    this.remote = remote;
+  }
+
+  public async Task OnEmit(Microsoft.Cadl.Compiler.Program program) {
+    var options = program.CompilerOptions;
+    var outputPath = options.OutputPath;
+    Console.Error.WriteLine($"OutputPath: {outputPath}");
+
+    var rest = await remote.ImportModuleAsync<CadlRestLibrary>("@cadl-lang/rest");
+    var result = await rest.GetAllRoutesAsync(program);
+    Console.Error.WriteLine("Rest library:");
+    foreach (var member in result) {
+      Console.Error.WriteLine($" {member.Verb} {member.Path}");
+    }
+  }
+}
+
+public class IpcProxyObject {
+  public CadlRemote Remote { get; }
 
   public RemoteObjectMeta Data { get; }
 
   public IpcProxyObject(CadlRemote remote, RemoteObjectMeta data) {
-    this.remote = remote;
+    this.Remote = remote;
     this.Data = data;
   }
 
@@ -61,7 +72,7 @@ public class IpcProxyObject {
   }
 
   public async Task<T> GetValueAsync<T>(string propertyName) {
-    var data = await remote.GetPropertyAsync<RemoteValueMeta<T>>(this.Data, propertyName);
+    var data = await Remote.GetPropertyAsync<RemoteValueMeta<T>>(this.Data, propertyName);
     return data.Value;
   }
 
@@ -70,12 +81,12 @@ public class IpcProxyObject {
   }
 
   public async Task<IpcProxyObject> GetObjectAsync(string propertyName) {
-    var data = await remote.GetPropertyAsync<RemoteObjectMeta>(this.Data, propertyName);
-    return new IpcProxyObject(remote, data);
+    var data = await Remote.GetPropertyAsync<RemoteObjectMeta>(this.Data, propertyName);
+    return new IpcProxyObject(Remote, data);
   }
 
 
   public async Task<T> CallMethodAsync<T>(string methodName, params RemoteMeta[] args) {
-    return await remote.CallMethodAsync<T>(Data, methodName, args);
+    return await Remote.CallMethodAsync<T>(Data, methodName, args);
   }
 }

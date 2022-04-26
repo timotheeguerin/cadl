@@ -11,5 +11,16 @@ public class CadlRestLibrary : RemoteBaseType {
   public CadlRestLibrary(IpcProxyObject proxy) : base(proxy) {
   }
 
-  public Task<RemoteArrayMeta> GetAllRoutesAsync(Program program) => Proxy.CallMethodAsync<RemoteArrayMeta>("getAllRoutes", program.Proxy.Data);
+  public async Task<OperationDetails[]> GetAllRoutesAsync(Program program) {
+    var result = await Proxy.CallMethodAsync<RemoteArrayMeta>("getAllRoutes", program.Proxy.Data);
+    return result.Items.Select(x => new OperationDetails(new IpcProxyObject(this.Proxy.Remote, (RemoteObjectMeta)x))).ToArray();
+  }
+
+  public class OperationDetails : RemoteBaseType {
+    public OperationDetails(IpcProxyObject proxy) : base(proxy) {
+    }
+
+    public string Path => Proxy.GetValue<string>("path");
+    public string Verb => Proxy.GetValue<string>("verb");
+  }
 }

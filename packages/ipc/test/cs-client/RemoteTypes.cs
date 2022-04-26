@@ -1,12 +1,18 @@
+using JsonSubTypes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 namespace Microsoft.Cadl.Remote {
 
-  public record RemoteMeta([property: JsonProperty("type")] string Type);
-  public record RemoteObjectMeta([property: JsonProperty("id")] long Id, [property: JsonProperty("members")] ObjectMember[] Members) : RemoteMeta("Object");
-  public record RemoteArrayMeta([property: JsonProperty("items")] RemoteMeta[] Items) : RemoteMeta("Array");
-  public record RemoteValueMeta<T>([property: JsonProperty("value")] T Value) : RemoteMeta("Value");
+  [JsonConverter(typeof(JsonSubtypes), "type")]
+  [JsonSubtypes.KnownSubType(typeof(RemoteObjectMeta), "object")]
+  [JsonSubtypes.KnownSubType(typeof(RemoteArrayMeta), "array")]
+  [JsonSubtypes.KnownSubType(typeof(RemoteValueMeta<>), "value")]
+  public abstract record RemoteMeta([property: JsonProperty("type")] string Type);
+
+  public record RemoteObjectMeta([property: JsonProperty("id")] long Id, [property: JsonProperty("members")] ObjectMember[] Members) : RemoteMeta("object");
+  public record RemoteArrayMeta([property: JsonProperty("items")] RemoteMeta[] Items) : RemoteMeta("array");
+  public record RemoteValueMeta<T>([property: JsonProperty("value")] T Value) : RemoteMeta("value");
 
   [JsonConverter(typeof(StringEnumConverter))]
   public enum ObjectMemeberType {

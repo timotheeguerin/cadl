@@ -45,6 +45,13 @@ namespace Microsoft.Cadl.Remote {
       return connection.InvokeAsync<RemoteObjectMeta>(RemoteRequests.ImportModule, new ImportModuleRequest { Name = name });
     }
 
+
+    public async Task<T> ImportModuleAsync<T>(string name) {
+      var module = await ImportModuleAsync(name);
+      var proxy = new IpcProxyObject(this, module);
+      return (T)Activator.CreateInstance(typeof(T), proxy)!;
+    }
+
     public Task<T> CallMethodAsync<T>(RemoteObjectMeta target, string methodName, RemoteMeta[] args) {
       return connection.InvokeAsync<T>(RemoteRequests.MethodCall, new MethodCallRequest { ObjectId = target.Id, Key = methodName, Args = args });
     }

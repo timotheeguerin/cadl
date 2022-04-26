@@ -1,1 +1,11 @@
+import "@cadl-lang/rest";
+
+using Cadl.Http;
+
+@get
+@route("/test")
 op test(): string;
+
+@post
+@route("/customPostPath")
+op test2(): string;

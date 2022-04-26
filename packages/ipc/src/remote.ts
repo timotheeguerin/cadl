@@ -43,7 +43,6 @@ export function createRemoteAccessor(connection: MessageConnection): RemoteAcces
       }
     });
     const result = await object[req.key](...args);
-    console.log("args", result);
     return valueToMeta(result);
   });
 
