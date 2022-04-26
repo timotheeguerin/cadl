@@ -1,3 +1,4 @@
+using Microsoft.Cadl.Remote;
 using Nerdbank.Streams;
 using Newtonsoft.Json;
 using StreamJsonRpc;
@@ -24,53 +25,66 @@ class Program {
 internal class Server {
   public JsonRpc Connection { get; internal set; }
 
-  public async Task onEmit(IpcObjectData program) {
+  public async Task onEmit(RemoteObjectMeta program) {
 
     // Log to STDERR so as to not corrupt the STDOUT pipe that we may be using for JSON-RPC.
-    Console.Error.WriteLine($"Received request: {String.Join(", ", program.Properties)}");
-    var programProxy = new IpcProxyObject(this.Connection, program);
-    var options = await programProxy.GetObjectAsync("compilerOptions");
-    Console.Error.WriteLine($"Received options: {options.Id}, {String.Join(", ", options.Properties)}");
-    var outputPath = await options.GetAsync<string>("outputPath");
+    var programProxy = new Microsoft.Cadl.Compiler.Program(new IpcProxyObject(this.Connection, program));
+    var options = programProxy.CompilerOptions;
+    var outputPath = options.OutputPath;
     Console.Error.WriteLine($"OutputPath: {outputPath}");
     return;
   }
 }
 
-
-class IpcObjectData {
-  public long Id { get; set; }
-
-  public string Type { get; set; }
-
-  public string[] Properties { get; set; }
-
-}
-
-class IpcProxyObject : IpcObjectData {
+public class IpcProxyObject {
   private readonly JsonRpc connection;
 
-  public IpcProxyObject(JsonRpc connection, IpcObjectData data) {
+  public RemoteObjectMeta Data { get; }
+
+  public IpcProxyObject(JsonRpc connection, RemoteObjectMeta data) {
     this.connection = connection;
-    this.Id = data.Id;
-    this.Type = data.Type;
-    this.Properties = data.Properties;
+    this.Data = data;
   }
 
-  public Task<T> GetAsync<T>(string propertyName) {
-    return connection.InvokeAsync<T>("CADL_OBJECT_PROP_ACCESS", new PropertyAccessRequest { ObjectId = this.Id, Key = propertyName });
+  public T Get<T>(string propertyName) where T : RemoteMeta {
+    return this.GetAsync<T>(propertyName).GetAwaiter().GetResult();
+  }
+
+  public Task<T> GetAsync<T>(string propertyName) where T : RemoteMeta {
+    return connection.InvokeAsync<T>(RemoteRequests.PropertyGet, new PropertyAccessRequest { ObjectId = this.Data.Id, Key = propertyName });
+  }
+
+
+  public T GetValue<T>(string propertyName) {
+    return this.GetValueAsync<T>(propertyName).GetAwaiter().GetResult();
+  }
+
+  public async Task<T> GetValueAsync<T>(string propertyName) {
+    var data = await this.GetAsync<RemoteValueMeta<T>>(propertyName);
+    return data.Value;
+  }
+
+  public IpcProxyObject GetObject(string propertyName) {
+    return GetObjectAsync(propertyName).GetAwaiter().GetResult();
   }
 
   public async Task<IpcProxyObject> GetObjectAsync(string propertyName) {
-    var data = await this.GetAsync<IpcObjectData>(propertyName);
+    var data = await this.GetAsync<RemoteObjectMeta>(propertyName);
     return new IpcProxyObject(this.connection, data);
   }
 }
 
-class PropertyAccessRequest {
+public class PropertyAccessRequest {
   [JsonProperty("objectId")]
   public long ObjectId { get; set; }
 
   [JsonProperty("key")]
   public string Key { get; set; }
+}
+
+
+public static class RemoteRequests {
+  public const string PropertyGet = "CADL_OBJECT_PROP_GET";
+  public const string MethodCall = "CADL_OBJECT_METHOD_CALL";
+  public const string ImportModule = "CADL_IMPORT_MODULE";
 }

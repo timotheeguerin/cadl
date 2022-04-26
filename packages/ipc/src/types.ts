@@ -1,6 +1,10 @@
 export interface CadlIpcConnection {
   sendRequest(name: string, value: unknown): Promise<unknown>;
-  ipcify(obj: unknown): any;
+  remote: RemoteAccessor;
+}
+
+export interface RemoteAccessor {
+  valueToMeta(value: unknown): MetaType | undefined;
 }
 
 export interface PropertyAccessRequest {
@@ -13,6 +17,22 @@ export interface PropertyAccessRequest {
    * Name of the key to access.
    */
   key: string;
+}
+
+export interface MethodCallRequest {
+  /**
+   * Id of the object to access.
+   */
+  objectId: number;
+
+  /**
+   * Name of the method to access.
+   */
+  key: string;
+}
+
+export interface ImportModuleRequest {
+  name: string;
 }
 
 export interface ObjectMember {

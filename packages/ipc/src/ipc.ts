@@ -4,7 +4,8 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
 } from "vscode-jsonrpc/node.js";
-import { CadlIpcConnection, PropertyAccessRequest } from "./types.js";
+import { createRemoteAccessor } from "./remote.js";
+import { CadlIpcConnection } from "./types.js";
 
 export function createIpcConnection(childProcess: ChildProcess): CadlIpcConnection {
   const connection = createMessageConnection(
@@ -36,65 +37,9 @@ export function createIpcConnection(childProcess: ChildProcess): CadlIpcConnecti
     return connection.sendRequest(name, value);
   }
 
-  connection.onRequest("CADL_OBJECT_PROP_ACCESS", (req: PropertyAccessRequest) => {
-    const object = objects.get(req.objectId);
-    if (object === undefined) {
-      return undefined;
-    }
-
-    return Promise.resolve(ipcify(object[req.key]));
-  });
-
-  const objectIds = new Map<any, number>();
-  const objects = new Map<number, any>();
-  let idCounter = 0;
-
-  function ipcify(item: unknown) {
-    switch (typeof item) {
-      case "bigint":
-      case "boolean":
-      case "number":
-      case "string":
-      case "symbol":
-        return item;
-      case "undefined":
-        return undefined;
-      case "object":
-        if (item === null) {
-          return null;
-        }
-        return ipcifyObject(item);
-      case "function":
-        return undefined;
-    }
-  }
-
-  function ipcifyObject(item: object) {
-    if (Array.isArray(item)) {
-      return undefined; // Todo implement array
-    }
-    let id = objectIds.get(item);
-    if (id === undefined) {
-      id = idCounter++;
-      objects.set(id, item);
-      objectIds.set(item, id);
-    }
-
-    return {
-      type: "object",
-      id,
-      properties: Object.keys(item),
-    };
-  }
-
+  const remote = createRemoteAccessor(connection);
   return {
     sendRequest,
-    ipcify,
+    remote,
   };
-}
-
-export interface IpcObject {
-  type: "object";
-  id: number;
-  properties: string[];
 }

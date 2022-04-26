@@ -13,6 +13,6 @@ export async function $onEmit(program: Program) {
     console.error("Stdin:", e.toString());
   });
   const connection = createIpcConnection(cp);
-  await connection.sendRequest("onEmit", { program: connection.ipcify(program) });
+  await connection.sendRequest("onEmit", { program: connection.remote.valueToMeta(program) });
   cp.kill();
 }
