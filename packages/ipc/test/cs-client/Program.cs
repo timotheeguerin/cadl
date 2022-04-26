@@ -32,6 +32,13 @@ internal class Server {
     var options = programProxy.CompilerOptions;
     var outputPath = options.OutputPath;
     Console.Error.WriteLine($"OutputPath: {outputPath}");
+
+    var remote = new CadlRemote(this.Connection);
+    var rest = await remote.ImportModuleAsync("@cadl-lang/rest");
+    Console.Error.WriteLine("Rest library:");
+    foreach (var member in rest.Members) {
+      Console.Error.WriteLine($"  {member.Type}: ${member.Name}");
+    }
     return;
   }
 }
@@ -72,19 +79,4 @@ public class IpcProxyObject {
     var data = await this.GetAsync<RemoteObjectMeta>(propertyName);
     return new IpcProxyObject(this.connection, data);
   }
-}
-
-public class PropertyAccessRequest {
-  [JsonProperty("objectId")]
-  public long ObjectId { get; set; }
-
-  [JsonProperty("key")]
-  public string Key { get; set; }
-}
-
-
-public static class RemoteRequests {
-  public const string PropertyGet = "CADL_OBJECT_PROP_GET";
-  public const string MethodCall = "CADL_OBJECT_METHOD_CALL";
-  public const string ImportModule = "CADL_IMPORT_MODULE";
 }
