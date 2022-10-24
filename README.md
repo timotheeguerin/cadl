@@ -12,7 +12,7 @@ the Getting Started section below. Please feel free to [file
 issues](https://github.com/Microsoft/cadl/issues) for any issues you encounter while
 using the preview.
 
-## Packages
+##    Packages
 
 | Name                                            | Changelog                    | Latest                                                                                                                             | Next                                                                   |
 | ----------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
