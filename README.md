@@ -1,5 +1,7 @@
 # Cadl
 
+(Don't merge this, just a test PR)
+
 [Try Cadl Online](https://aka.ms/trycadl)
 
 Cadl is a language for describing cloud service APIs and generating other API
