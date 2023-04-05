@@ -216,6 +216,7 @@ namespace ListKind {
 
   export const TemplateArguments = {
     ...TemplateParameters,
+    allowEmpty: true,
   } as const;
 
   export const CallArguments = {
@@ -537,7 +538,7 @@ function createParser(code: string | SourceFile, options: ParseOptions = {}): Pa
     const nsSegments: IdentifierNode[] = [];
     while (currentName.kind !== SyntaxKind.Identifier) {
       nsSegments.push(currentName.id);
-      currentName = currentName.base;
+      currentName = currentName.base.target;
     }
     nsSegments.push(currentName);
 
@@ -1050,19 +1051,53 @@ function createParser(code: string | SourceFile, options: ParseOptions = {}): Pa
     }
     return expr;
   }
+
   function parseReferenceExpression(
     message?: keyof CompilerDiagnostics["token-expected"]
   ): TypeReferenceNode {
+    return parseReferenceOrMemberExpression(message);
+  }
+
+  function parseReferenceOrMemberExpression(
+    message?: keyof CompilerDiagnostics["token-expected"],
+    recoverFromKeyword = true
+  ): TypeReferenceNode {
     const pos = tokenPos();
-    const target = parseIdentifierOrMemberExpression(message);
+    const target: IdentifierNode | MemberExpressionNode = parseIdentifier({
+      message,
+      recoverFromKeyword,
+    });
     const args = parseOptionalList(ListKind.TemplateArguments, parseExpression);
 
-    return {
+    let base: TypeReferenceNode = {
       kind: SyntaxKind.TypeReference,
       target,
       arguments: args,
       ...finishNode(pos),
     };
+
+    while (parseOptional(Token.Dot)) {
+      base = {
+        kind: SyntaxKind.TypeReference,
+        target: {
+          kind: SyntaxKind.MemberExpression,
+          base,
+          // Error recovery: false arg here means don't treat a keyword as an
+          // identifier after `.` in member expression. Otherwise we will
+          // parse `@Outer.<missing identifier> model M{}` as having decorator
+          // `@Outer.model` applied to invalid statement `M {}` instead of
+          // having incomplete decorator `@Outer.` applied to `model M {}`.
+          id: parseIdentifier({
+            recoverFromKeyword: false,
+          }),
+          ...finishNode(pos),
+        },
+        arguments: [],
+        ...finishNode(pos),
+      };
+    }
+
+    return base;
   }
 
   function parseAugmentDecorator(): AugmentDecoratorStatementNode {
@@ -1210,7 +1245,12 @@ function createParser(code: string | SourceFile, options: ParseOptions = {}): Pa
     while (parseOptional(Token.Dot)) {
       base = {
         kind: SyntaxKind.MemberExpression,
-        base,
+        base: {
+          kind: SyntaxKind.TypeReference,
+          target: base,
+          arguments: [],
+          ...finishNode(pos),
+        },
         // Error recovery: false arg here means don't treat a keyword as an
         // identifier after `.` in member expression. Otherwise we will
         // parse `@Outer.<missing identifier> model M{}` as having decorator
@@ -2621,6 +2661,7 @@ function createParser(code: string | SourceFile, options: ParseOptions = {}): Pa
       printable?: boolean;
     }
   ) {
+    console.trace("ERror");
     parseErrorInNextFinishedNode = true;
 
     const location = {

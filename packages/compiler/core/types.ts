@@ -1002,7 +1002,7 @@ export type ReferenceExpression =
 export interface MemberExpressionNode extends BaseNode {
   readonly kind: SyntaxKind.MemberExpression;
   readonly id: IdentifierNode;
-  readonly base: MemberExpressionNode | IdentifierNode;
+  readonly base: TypeReferenceNode;
 }
 
 export interface NamespaceStatementNode extends BaseNode, DeclarationNode {

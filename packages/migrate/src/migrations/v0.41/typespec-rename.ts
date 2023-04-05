@@ -1,5 +1,5 @@
-import type { Node, TypeSpecScriptNode } from "@typespec/compiler";
 import { getAnyExtensionFromPath, NodePackage } from "@typespec/compiler";
+import type { CadlScriptNode, Node } from "@typespec/compiler-v0.40";
 import { readFile } from "fs/promises";
 import * as yaml from "js-yaml";
 import * as path from "path";
@@ -114,7 +114,7 @@ export const migrateCadlNameToTypeSpec = createContentMigration({
   migrate: (
     { printNode, printNodes }: MigrationContext,
     compilerV40: TypeSpecCompilerV0_40,
-    root: TypeSpecScriptNode
+    root: CadlScriptNode
   ) => {
     const actions: AstContentMigrateAction[] = [];
     visitRecursive(compilerV40, root, (node) => {

@@ -829,6 +829,9 @@ export function createChecker(program: Program): Checker {
     instantiateTemplate = true
   ): Type {
     const sym = resolveTypeReferenceSym(node, mapper);
+    if (sym?.name === "prop") {
+      console.log("Suym", sym);
+    }
     if (!sym) {
       return errorType;
     }
@@ -1618,6 +1621,7 @@ export function createChecker(program: Program): Checker {
       decorators = [...baseOperation.decorators];
     } else {
       parameters = getTypeForNode(node.signature.parameters, mapper) as Model;
+      console.log("Get return type", SyntaxKind[node.signature.returnType.kind]);
       returnType = getTypeForNode(node.signature.returnType, mapper);
     }
 
@@ -4495,7 +4499,7 @@ export function createChecker(program: Program): Checker {
 
     while (current.kind === SyntaxKind.MemberExpression) {
       parts.push(current.id.sv);
-      current = current.base;
+      current = current.base.target;
     }
 
     parts.push(current.sv);
