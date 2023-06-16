@@ -569,6 +569,73 @@ interface Foo {
       });
     });
 
+    interface Foo {
+      // prop1 comment
+      prop1: string;
+
+      // prop2 comment
+
+      prop2: string;
+    }
+
+    it("keeps touching comment above decorator of model property", () => {
+      assertFormat({
+        code: `
+model Foo {
+  
+  // prop1 comment
+  prop1: string;
+
+  // prop2 comment
+  @doc("Foo")
+  prop2: string;
+
+
+}
+`,
+        expected: `
+model Foo {
+  // prop1 comment
+  prop1: string;
+
+  // prop2 comment
+  @doc("Foo")
+  prop2: string;
+}
+`,
+      });
+    });
+
+    it.only("keeps new lines between comment and model properties", () => {
+      assertFormat({
+        code: `
+model Foo {
+  
+  // prop1 comment
+  prop1: string;
+
+  // prop2 comment
+
+  @doc("Foo")
+  prop2: string;
+
+
+}
+`,
+        expected: `
+model Foo {
+  // prop1 comment
+  prop1: string;
+
+  // prop2 comment
+
+  @doc("Foo")
+  prop2: string;
+}
+`,
+      });
+    });
+
     it("format comment between decorator and namespace statement", () => {
       assertFormat({
         code: `
