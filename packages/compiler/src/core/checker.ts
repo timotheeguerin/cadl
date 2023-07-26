@@ -4679,7 +4679,7 @@ export function createChecker(program: Program): Checker {
 
     while (current.kind === SyntaxKind.MemberExpression) {
       parts.push(current.id.sv);
-      current = current.base;
+      current = current.base.target;
     }
 
     parts.push(current.sv);
