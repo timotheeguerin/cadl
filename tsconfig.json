@@ -22,6 +22,7 @@
     { "path": "packages/tspd/tsconfig.json" },
     { "path": "packages/samples/tsconfig.json" },
     { "path": "packages/json-schema/tsconfig.json" },
+    { "path": "packages/postman/tsconfig.json" },
     { "path": "packages/best-practices/tsconfig.json" }
   ],
   "files": []

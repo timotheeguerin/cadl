@@ -182,6 +182,12 @@
       "shouldPublish": false
     },
     {
+      "packageName": "@typespec/postman",
+      "projectFolder": "packages/postman",
+      "reviewCategory": "production",
+      "shouldPublish": false
+    },
+    {
       "packageName": "@typespec/website",
       "projectFolder": "packages/website",
       "reviewCategory": "production",
