@@ -50,6 +50,7 @@
     "@typespec/rest": "workspace:~0.48.0",
     "@typespec/openapi": "workspace:~0.48.0",
     "@typespec/openapi3": "workspace:~0.48.1",
+    "@typespec/postman": "workspace:~0.48.0",
     "@typespec/html-program-viewer": "workspace:~0.48.0"
   },
   "devDependencies": {
