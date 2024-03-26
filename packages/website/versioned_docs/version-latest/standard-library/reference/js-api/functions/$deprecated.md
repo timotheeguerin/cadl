@@ -26,6 +26,7 @@ Mark a type as deprecated
 
 ## Example
 
-``` @deprecated("Foo is deprecated, use Bar instead.")
-    model Foo {}
+```tsp
+@deprecated("Foo is deprecated, use Bar instead.")
+model Foo {}
 ```

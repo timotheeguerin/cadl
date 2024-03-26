@@ -1252,8 +1252,9 @@ export const $withDefaultKeyVisibility: WithDefaultKeyVisibilityDecorator = (
  * @param message Deprecation target.
  *
  * @example
- * ``` @deprecated("Foo is deprecated, use Bar instead.")
- *     model Foo {}
+ * ```tsp
+ * @deprecated("Foo is deprecated, use Bar instead.")
+ * model Foo {}
  * ```
  */
 // eslint-disable-next-line deprecation/deprecation

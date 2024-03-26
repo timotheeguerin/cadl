@@ -72,12 +72,15 @@ words:
   - protoc
   - pwsh
   - regen
+  - rehype
   - respecify
   - rpaas
   - rushx
   - safeint
   - segmentof
   - sfixed
+  - shiki
+  - shikijs
   - sint
   - ssvs
   - strs

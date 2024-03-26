@@ -48,6 +48,7 @@ function reverseSidebarItems(items: NormalizedSidebar) {
   return result;
 }
 
+import { RehypeShikiPlugin } from "./src/plugins/shiki";
 import { LightTheme } from "./themes/light";
 
 const baseUrl = process.env.TYPESPEC_WEBSITE_BASE_PATH ?? "/";
@@ -122,6 +123,7 @@ const config: Config = {
           sidebarPath: require.resolve("./sidebars.js"),
           path: "../../docs",
           versions: getVersionLabels(),
+          beforeDefaultRehypePlugins: [RehypeShikiPlugin],
           async sidebarItemsGenerator({ defaultSidebarItemsGenerator, ...args }) {
             const sidebarItems = await defaultSidebarItemsGenerator(args);
             return args.item.dirName === "release-notes"
