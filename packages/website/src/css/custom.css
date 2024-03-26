@@ -223,3 +223,34 @@
   border: 1px solid var(--neutral-stroke-transparent-rest, rgba(255, 255, 255, 0)) !important;
   background: var(--colorNeutralBackground1) !important;
 }
+
+/* Shiki Styles */
+*,
+*::before,
+*::after {
+  --shiki-dark: var(--ifm-pre-color);
+  --shiki-dark-bg: var(--ifm-color-emphasis-100);
+}
+
+[data-theme="dark"] .shiki {
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+[data-theme="dark"] .shiki,
+[data-theme="dark"] .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+.shiki code {
+  /* display as flex-column to remove gap from line-breaks */
+  display: flex;
+  flex-direction: column;
+  width: min-content;
+  min-width: 100%;
+}
+
+.shiki .line:not(:last-child):empty::after {
+  /* display additional space so that empty lines don't collapse */
+  /* note that this is only visual and content does not get copied */
+  content: " ";
+}
