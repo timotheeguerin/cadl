@@ -15,6 +15,7 @@ export default {
     "keywords",
     "sideEffects",
     "main",
+    "tspMain",
     "module",
     "types",
     "exports",
