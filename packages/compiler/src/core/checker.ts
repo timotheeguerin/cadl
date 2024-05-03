@@ -300,6 +300,9 @@ export interface Checker {
   /** @internal */
   getValueForNode(node: Node): Value | null;
 
+  /** @internal */
+  getTypeOrValueForNode(node: Node): Type | Value | null;
+
   readonly errorType: ErrorType;
   readonly voidType: VoidType;
   readonly neverType: NeverType;
@@ -455,6 +458,7 @@ export function createChecker(program: Program): Checker {
     getStdType,
     resolveTypeReference,
     getValueForNode,
+    getTypeOrValueForNode,
   };
 
   const projectionMembers = createProjectionMembers(checker);
@@ -3231,6 +3235,17 @@ export function createChecker(program: Program): Checker {
       if (typeOrValue !== null) {
         if (isValue(typeOrValue)) {
           hasValue = true;
+        } else if ("kind" in typeOrValue && typeOrValue.kind === "TemplateParameter") {
+          if (typeOrValue.constraint) {
+            if (typeOrValue.constraint.valueType) {
+              hasValue = true;
+            }
+            if (typeOrValue.constraint.type) {
+              hasType = true;
+            }
+          } else {
+            hasType = true;
+          }
         } else {
           hasType = true;
         }
@@ -3250,8 +3265,13 @@ export function createChecker(program: Program): Checker {
     if (hasValue) {
       let str = node.head.value;
       for (const [span, typeOrValue] of spanTypeOrValues) {
-        compilerAssert(typeOrValue !== null && isValue(typeOrValue), "Expected value.");
-        str += stringifyValueForTemplate(typeOrValue);
+        if (
+          typeOrValue !== null &&
+          (!("kind" in typeOrValue) || typeOrValue.kind !== "TemplateParameter")
+        ) {
+          compilerAssert(typeOrValue !== null && isValue(typeOrValue), "Expected value.");
+          str += stringifyValueForTemplate(typeOrValue);
+        }
         str += span.literal.value;
       }
       return checkStringValue(createLiteralType(str), undefined, node);
@@ -7304,6 +7324,12 @@ export function createChecker(program: Program): Checker {
       return (
         (source.kind === "String" && source.value === target.value) ||
         (source.kind === "StringTemplate" && source.stringValue === target.value)
+      );
+    }
+    if (target.kind === "StringTemplate" && target.stringValue) {
+      return (
+        (source.kind === "String" && source.value === target.stringValue) ||
+        (source.kind === "StringTemplate" && source.stringValue === target.stringValue)
       );
     }
     if (target.kind === "Number") {
