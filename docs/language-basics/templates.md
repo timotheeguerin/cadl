@@ -133,6 +133,8 @@ alias TakesTypeOrValue<StringTypeOrValue extends string | (valueof string)> = {
 alias M1 = TakesValue<"a">;
 ```
 
+The [`typeof` operator](./values.md#the-typeof-operator) can be used to get the declared type of a value if needed.
+
 ### Template parameter value types
 
 When a template is instantiated with a value, the type of the value and the result of the `typeof` operator is determined based on the argument rather than the template parameter constraint. This follows the same rules as [const declaration type inference](./values.md#const-declarations). In particular, inside the template `TakesValue`, the type of `StringValue` is the string literal type `"b"`. If we passed a `const` instead, the type of the value would be the const's type. In the following example, the type of `property` in `M1` is `"a" | "b"`.
