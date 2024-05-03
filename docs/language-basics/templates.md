@@ -122,7 +122,7 @@ alias TakesValue<StringType extends string, StringValue extends valueof string> 
 alias M1 = TakesValue<"a", "b">;
 ```
 
-When a passing a literal or an enum or union member reference directly to a template for a template parameter that accepts either a type or a value, we pass the value. In particular, `StringTypeOrValue` is a value with the string literal type `"a"`.
+When a passing a literal or an enum or union member reference directly as a template parameter that accepts either a type or a value, we pass the value. In particular, `StringTypeOrValue` is a value with the string literal type `"a"`.
 
 ```typespec
 alias TakesTypeOrValue<StringTypeOrValue extends string | (valueof string)> = {
@@ -135,19 +135,16 @@ alias M1 = TakesValue<"a">;
 
 ### Template parameter value types
 
-When a template is instantiated with a value, the type of the value is determined based on the parameter rather than the template parameter constraint. This follows the same rules as [const declaration type inference](./values.md#const-declarations). In particular, inside the template `TakesValue`, the type of `StringValue` is the string literal type `"b"`. If we passed a `const` instead, the type of the value would be the const's type. In the following example, the type of StringValue is `"a" | "b"`.
+When a template is instantiated with a value, the type of the value and the result of the `typeof` operator is determined based on the argument rather than the template parameter constraint. This follows the same rules as [const declaration type inference](./values.md#const-declarations). In particular, inside the template `TakesValue`, the type of `StringValue` is the string literal type `"b"`. If we passed a `const` instead, the type of the value would be the const's type. In the following example, the type of `property` in `M1` is `"a" | "b"`.
 
 ```typespec
 alias TakesValue<
   StringValue extends valueof string
 > = {
   @doc(StringValue)
-  property: string;
+  property: typeof StringValue;
 };
 
 const str: "a" | "b" = "a";
-
-alias M1 = TakesValue<"a">;
+alias M1 = TakesValue<str>;
 ```
-
-This behavior is not directly observable within TypeSpec, but when decorators and emitters consume values, they can observe the type of the value in order to for example declare an appropriate variable in a target language.

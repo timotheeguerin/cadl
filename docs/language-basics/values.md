@@ -115,6 +115,21 @@ const objectValue = #{ x: 0, y: 0 };
 //      ^-- type: { x: 0, y: 0 }
 ```
 
+## The `typeof` operator
+
+The `typeof` operator returns the declared or inferred type of a value reference. Note that the actual value being stored by the referenced variable may be more specific than the declared type of the value. For example, if a const is declared with a union type, the value will only ever store one specific variant at a time, but typeof will give you the declared union type.
+
+```typespec
+const stringValue: string = "hello";
+// typeof stringValue returns `string`.
+
+const oneValue = 1;
+// typeof stringValue returns `1`
+
+const stringOrOneValue: string | 1 = 1;
+// typeof stringOrOneValue returns `string | 1`
+```
+
 ## Validation
 
 TypeSpec will validate values against built-in validation decorators like `@minLength` and `@maxValue`.
