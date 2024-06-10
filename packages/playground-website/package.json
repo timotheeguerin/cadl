@@ -64,6 +64,7 @@
     "@typespec/rest": "workspace:~",
     "@typespec/versioning": "workspace:~",
     "es-module-shims": "~1.10.0",
+    "monaco-editor": "~0.46.0",
     "react": "~18.3.1",
     "react-dom": "~18.3.1"
   },

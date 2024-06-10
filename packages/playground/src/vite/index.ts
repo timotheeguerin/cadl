@@ -4,20 +4,14 @@ import type { Plugin, ResolvedConfig, UserConfig } from "vite";
 import type { PlaygroundUserConfig } from "./types.js";
 
 export function definePlaygroundViteConfig(config: PlaygroundUserConfig): UserConfig {
+  const prefix = `monaco-editor/esm/vs`;
   return {
     base: "./",
     build: {
       target: "esnext",
       chunkSizeWarningLimit: 5000,
       rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes("/node_modules/monaco-editor/esm/vs/editor")) {
-              return "monaco";
-            }
-            return undefined;
-          },
-        },
+        output: {},
       },
     },
     esbuild: {

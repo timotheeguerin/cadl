@@ -872,6 +872,9 @@ importers:
       es-module-shims:
         specifier: ~1.10.0
         version: 1.10.0
+      monaco-editor:
+        specifier: ~0.46.0
+        version: 0.46.0
       react:
         specifier: ~18.3.1
         version: 18.3.1
