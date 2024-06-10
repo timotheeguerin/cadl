@@ -3,6 +3,7 @@ import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
+  Button,
   Card,
 } from "@fluentui/react-components";
 import { CardUiRegular } from "@fluentui/react-icons";
@@ -28,11 +29,19 @@ import {
   ProgramViewer,
   useMonacoModel,
 } from "@typespec/playground/react";
-import { memo } from "react";
+import { ReactNode, memo, useCallback } from "react";
 import { ProgramProvider, useProgram } from "./context.js";
+import { httpProtocolHandler } from "./http-protocol-handler.js";
 import style from "./tsp-ui.module.css";
 
-export interface TspUIProps {}
+export interface ProtocolHandler {
+  operationDetails?: (props: { operation: Operation }) => ReactNode;
+  request?: (program: Program, operation: Operation, parameters: unknown) => Promise<unknown>;
+}
+export interface TspUIProps {
+  protocolHandler?: ProtocolHandler;
+}
+
 export const TspUI = ({ program }: OutputViewerProps) => {
   const services = listServices(program);
   return (
@@ -104,10 +113,22 @@ const ContainerUI = memo(({ container }: ContainerUIProps) => {
 });
 
 export const OperationUI = memo(({ operation }: { operation: Operation }) => {
+  const program = useProgram();
+  const onSend = useCallback(() => {
+    void httpProtocolHandler.request?.(
+      program,
+      operation,
+      generateJsonSample(program, operation.parameters)
+    );
+  }, [program]);
   return (
     <Card>
+      {httpProtocolHandler.operationDetails && (
+        <httpProtocolHandler.operationDetails operation={operation} />
+      )}
       <h4>Parameters</h4>
       <OperationParametersUI operation={operation} />
+      <Button onClick={onSend}>Send</Button>
       <h4>Return type</h4>
       <ReturnTypeUI operation={operation} />
     </Card>
