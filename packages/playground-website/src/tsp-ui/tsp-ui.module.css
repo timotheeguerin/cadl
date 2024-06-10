@@ -1,3 +1,22 @@
+.tsp-ui {
+  overflow: auto;
+  height: 100%;
+}
+
 .service-ui {
   padding: 20px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.item-name {
+  font-weight: bold;
+}
+.item-description {
+  font-style: italic;
+  color: var(--colorNeutralForeground3);
 }

@@ -1,10 +1,11 @@
 import { Uri, editor, type IDisposable } from "monaco-editor";
-import { useEffect, useMemo, useRef, type FunctionComponent } from "react";
+import { useEffect, useMemo, useRef, useState, type FunctionComponent } from "react";
 
 export interface EditorProps {
   model: editor.IModel;
   actions?: editor.IActionDescriptor[];
   options: editor.IStandaloneEditorConstructionOptions;
+  height?: { kind: "fill" } | { kind: "dynamic"; max?: number };
   onMount?: (data: OnMountData) => void;
 }
 
@@ -17,16 +18,30 @@ export interface EditorCommand {
   handle: () => void;
 }
 
-export const Editor: FunctionComponent<EditorProps> = ({ model, options, actions, onMount }) => {
+export const Editor: FunctionComponent<EditorProps> = ({
+  height,
+  model,
+  options,
+  actions,
+  onMount,
+}) => {
   const editorContainerRef = useRef(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     editorRef.current = editor.create(editorContainerRef.current!, {
       model,
-      automaticLayout: true,
       ...options,
     });
+    editorRef.current.onDidContentSizeChange((e) => {
+      setContentHeight(e.contentHeight);
+    });
+    const obs = new ResizeObserver(() => {
+      editorRef.current?.layout();
+    });
+    obs.observe(editorContainerRef.current!);
     onMount?.({ editor: editorRef.current });
   }, []);
 
@@ -50,10 +65,16 @@ export const Editor: FunctionComponent<EditorProps> = ({ model, options, actions
     }
   }, [model]);
 
+  const resolvedHeight =
+    height === undefined || height.kind === "fill"
+      ? "100%"
+      : contentHeight
+        ? Math.min(contentHeight, height.max ?? Infinity)
+        : undefined;
   return (
     <div
       className="monaco-editor-container"
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: resolvedHeight, minHeight: 0 }}
       ref={editorContainerRef}
       data-tabster='{"uncontrolled": {}}' // https://github.com/microsoft/tabster/issues/316
     ></div>
