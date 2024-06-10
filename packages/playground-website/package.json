@@ -51,6 +51,8 @@
     "!dist/test/**"
   ],
   "dependencies": {
+    "@fluentui/react-components": "~9.52.0",
+    "@fluentui/react-icons": "^2.0.240",
     "@typespec/compiler": "workspace:~",
     "@typespec/html-program-viewer": "workspace:~",
     "@typespec/http": "workspace:~",

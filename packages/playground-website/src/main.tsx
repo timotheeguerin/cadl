@@ -12,6 +12,7 @@ import samples from "../samples/dist/samples.js";
 import { MANIFEST } from "@typespec/compiler";
 import "@typespec/playground/styles.css";
 import "./style.css";
+import { TspUIViewer } from "./tsp-ui/tsp-ui.js";
 
 registerMonacoDefaultWorkersForVite();
 
@@ -51,6 +52,7 @@ await renderReactPlayground({
   importConfig: {
     useShim: true,
   },
+  viewers: [TspUIViewer],
   footer: <PlaygroundFooter />,
   onFileBug: () => {
     const bodyPayload = encodeURIComponent(`\n\n\n[Playground Link](${document.location.href})`);
