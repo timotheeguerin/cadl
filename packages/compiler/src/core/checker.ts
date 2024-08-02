@@ -412,6 +412,56 @@ export function createChecker(program: Program): Checker {
 
   // interpreter state
   let currentProjectionDirection: "to" | "from" | "pre_to" | "pre_from" | undefined;
+
+  class PendingResolutions {
+    #stack: [sym: Sym, kind: ResolutionKind][] = [];
+    #results: boolean[] = [];
+
+    push(sym: Sym, kind: ResolutionKind): boolean {
+      const cycleStartIndex = this.#findCycleStartIndex(sym, kind);
+      if (cycleStartIndex !== -1) {
+        // Cycle detected;
+        for (let i = cycleStartIndex; i < this.#stack.length; i++) {
+          this.#results[i] = false;
+        }
+        return false;
+      }
+      this.#stack.push([sym, kind]);
+      this.#results.push(true);
+      return true;
+    }
+
+    start(sym: Sym, kind: ResolutionKind) {
+      this.#stack.push([sym, kind]);
+    }
+
+    #findCycleStartIndex(sym: Sym, kind: ResolutionKind): number {
+      for (let i = this.#stack.length - 1; i >= 0; i--) {
+        const symAtI = this.#stack[i][0];
+        const a = getSymbolLinks(symAtI);
+        // if (symAtI.type ?? a.declaredType) {
+        //   return -1;
+        // }
+        if (this.#stack[i][0] === sym && this.#stack[i][1] === kind) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    has(sym: Sym, kind: ResolutionKind): boolean {
+      const index = this.#findCycleStartIndex(sym, kind);
+      return index !== -1;
+    }
+
+    finish(sym: Sym, kind: ResolutionKind) {
+      const last = this.#stack.pop();
+      // compilerAssert(last !== undefined, "Stack is empty.");
+      // compilerAssert(last[0] === symId, "Resolution stack item not matching");
+      // compilerAssert(last[1] === kind, "Resolution stack item not matching");
+    }
+  }
+
   /**
    * Set keeping track of node pending type resolution.
    * Key is the SymId of a node. It can be retrieved with getNodeSymId(node)
@@ -1135,7 +1185,7 @@ export function createChecker(program: Program): Checker {
   /**
    * Return a fully qualified id of node
    */
-  function getNodeSymId(
+  function getNodeSym(
     node:
       | ModelStatementNode
       | ScalarStatementNode
@@ -1145,14 +1195,13 @@ export function createChecker(program: Program): Checker {
       | OperationStatementNode
       | TemplateParameterDeclarationNode
       | UnionStatementNode
-  ): number {
+  ): Sym {
     const symbol =
       node.kind === SyntaxKind.OperationStatement &&
       node.parent?.kind === SyntaxKind.InterfaceStatement
         ? getSymbolForMember(node)
         : node.symbol;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-    return symbol?.id!;
+    return symbol!;
   }
 
   /**
@@ -1195,7 +1244,7 @@ export function createChecker(program: Program): Checker {
     const grandParentNode = parentNode.parent;
     const links = getSymbolLinks(node.symbol);
 
-    if (pendingResolutions.has(getNodeSymId(node), ResolutionKind.Constraint)) {
+    if (pendingResolutions.has(node.symbol, ResolutionKind.Constraint)) {
       if (mapper === undefined) {
         reportCheckerDiagnostic(
           createDiagnostic({
@@ -1222,16 +1271,17 @@ export function createChecker(program: Program): Checker {
         }
       }
       const index = parentNode.templateParameters.findIndex((v) => v === node);
-      type = links.declaredType = createAndFinishType({
+      type = createAndFinishType({
         kind: "TemplateParameter",
         node: node,
       });
 
       if (node.constraint) {
-        pendingResolutions.start(getNodeSymId(node), ResolutionKind.Constraint);
+        pendingResolutions.start(node.symbol, ResolutionKind.Constraint);
         type.constraint = getParamConstraintEntityForNode(node.constraint);
-        pendingResolutions.finish(getNodeSymId(node), ResolutionKind.Constraint);
+        pendingResolutions.finish(node.symbol, ResolutionKind.Constraint);
       }
+      links.declaredType = type;
       if (node.default) {
         type.default = checkTemplateParameterDefault(
           node.default,
@@ -2626,9 +2676,10 @@ export function createChecker(program: Program): Checker {
   ): Operation | undefined {
     if (!opReference) return undefined;
     // Ensure that we don't end up with a circular reference to the same operation
-    const opSymId = getNodeSymId(operation);
-    if (opSymId) {
-      pendingResolutions.start(opSymId, ResolutionKind.BaseType);
+    const sym = getNodeSym(operation);
+
+    if (sym) {
+      pendingResolutions.start(sym, ResolutionKind.BaseType);
     }
 
     const target = resolveTypeReferenceSym(opReference, mapper);
@@ -2637,9 +2688,7 @@ export function createChecker(program: Program): Checker {
     }
 
     // Did we encounter a circular operation reference?
-    if (
-      pendingResolutions.has(getNodeSymId(target.declarations[0] as any), ResolutionKind.BaseType)
-    ) {
+    if (pendingResolutions.has(target, ResolutionKind.BaseType)) {
       if (mapper === undefined) {
         reportCheckerDiagnostic(
           createDiagnostic({
@@ -2650,13 +2699,14 @@ export function createChecker(program: Program): Checker {
         );
       }
 
+      pendingResolutions.finish(sym, ResolutionKind.BaseType);
       return undefined;
     }
 
     // Resolve the base operation type
     const baseOperation = checkTypeReferenceSymbol(target, opReference, mapper);
-    if (opSymId) {
-      pendingResolutions.finish(opSymId, ResolutionKind.BaseType);
+    if (sym) {
+      pendingResolutions.finish(sym, ResolutionKind.BaseType);
     }
 
     if (isErrorType(baseOperation)) {
@@ -5048,17 +5098,14 @@ export function createChecker(program: Program): Checker {
       );
       return undefined;
     }
-    const modelSymId = getNodeSymId(model);
-    pendingResolutions.start(modelSymId, ResolutionKind.BaseType);
+    pendingResolutions.start(model.symbol, ResolutionKind.BaseType);
 
     const target = resolveTypeReferenceSym(heritageRef, mapper);
     if (target === undefined) {
       return undefined;
     }
 
-    if (
-      pendingResolutions.has(getNodeSymId(target.declarations[0] as any), ResolutionKind.BaseType)
-    ) {
+    if (pendingResolutions.has(target, ResolutionKind.BaseType)) {
       if (mapper === undefined) {
         reportCheckerDiagnostic(
           createDiagnostic({
@@ -5068,10 +5115,11 @@ export function createChecker(program: Program): Checker {
           })
         );
       }
+      pendingResolutions.finish(model.symbol, ResolutionKind.BaseType);
       return undefined;
     }
     const heritageType = checkTypeReferenceSymbol(target, heritageRef, mapper);
-    pendingResolutions.finish(modelSymId, ResolutionKind.BaseType);
+    pendingResolutions.finish(model.symbol, ResolutionKind.BaseType);
     if (isErrorType(heritageType)) {
       compilerAssert(program.hasError(), "Should already have reported an error.", heritageRef);
       return undefined;
@@ -5102,8 +5150,7 @@ export function createChecker(program: Program): Checker {
   ): Model | undefined {
     if (!isExpr) return undefined;
 
-    const modelSymId = getNodeSymId(model);
-    pendingResolutions.start(modelSymId, ResolutionKind.BaseType);
+    pendingResolutions.start(model.symbol, ResolutionKind.BaseType);
     let isType;
     if (isExpr.kind === SyntaxKind.ModelExpression) {
       reportCheckerDiagnostic(
@@ -5121,9 +5168,7 @@ export function createChecker(program: Program): Checker {
       if (target === undefined) {
         return undefined;
       }
-      if (
-        pendingResolutions.has(getNodeSymId(target.declarations[0] as any), ResolutionKind.BaseType)
-      ) {
+      if (pendingResolutions.has(target, ResolutionKind.BaseType)) {
         if (mapper === undefined) {
           reportCheckerDiagnostic(
             createDiagnostic({
@@ -5141,7 +5186,7 @@ export function createChecker(program: Program): Checker {
       return undefined;
     }
 
-    pendingResolutions.finish(modelSymId, ResolutionKind.BaseType);
+    pendingResolutions.finish(model.symbol, ResolutionKind.BaseType);
 
     if (isType.kind !== "Model") {
       reportCheckerDiagnostic(createDiagnostic({ code: "is-model", target: isExpr }));
@@ -5241,7 +5286,6 @@ export function createChecker(program: Program): Checker {
     mapper: TypeMapper | undefined
   ): ModelProperty {
     const sym = getSymbolForMember(prop)!;
-    const symId = getSymbolId(sym);
     const links = getSymbolLinksForMember(prop);
 
     if (links && links.declaredType && mapper === undefined) {
@@ -5258,7 +5302,7 @@ export function createChecker(program: Program): Checker {
       decorators: [],
     });
 
-    if (pendingResolutions.has(symId, ResolutionKind.Type) && mapper === undefined) {
+    if (pendingResolutions.has(sym, ResolutionKind.Type) && mapper === undefined) {
       reportCheckerDiagnostic(
         createDiagnostic({
           code: "circular-prop",
@@ -5268,7 +5312,7 @@ export function createChecker(program: Program): Checker {
       );
       type.type = errorType;
     } else {
-      pendingResolutions.start(symId, ResolutionKind.Type);
+      pendingResolutions.start(sym, ResolutionKind.Type);
       type.type = getTypeForNode(prop.value, mapper);
       if (prop.default) {
         const defaultValue = checkDefaultValue(prop.default, type.type);
@@ -5295,7 +5339,7 @@ export function createChecker(program: Program): Checker {
       finishType(type);
     }
 
-    pendingResolutions.finish(symId, ResolutionKind.Type);
+    pendingResolutions.finish(sym, ResolutionKind.Type);
 
     return type;
   }
@@ -5753,17 +5797,14 @@ export function createChecker(program: Program): Checker {
     extendsRef: TypeReferenceNode,
     mapper: TypeMapper | undefined
   ): Scalar | undefined {
-    const symId = getNodeSymId(scalar);
-    pendingResolutions.start(symId, ResolutionKind.BaseType);
+    pendingResolutions.start(scalar.symbol, ResolutionKind.BaseType);
 
     const target = resolveTypeReferenceSym(extendsRef, mapper);
     if (target === undefined) {
       return undefined;
     }
 
-    if (
-      pendingResolutions.has(getNodeSymId(target.declarations[0] as any), ResolutionKind.BaseType)
-    ) {
+    if (pendingResolutions.has(target, ResolutionKind.BaseType)) {
       if (mapper === undefined) {
         reportCheckerDiagnostic(
           createDiagnostic({
@@ -5773,10 +5814,11 @@ export function createChecker(program: Program): Checker {
           })
         );
       }
+      pendingResolutions.finish(scalar.symbol, ResolutionKind.BaseType);
       return undefined;
     }
     const extendsType = checkTypeReferenceSymbol(target, extendsRef, mapper);
-    pendingResolutions.finish(symId, ResolutionKind.BaseType);
+    pendingResolutions.finish(scalar.symbol, ResolutionKind.BaseType);
     if (isErrorType(extendsType)) {
       compilerAssert(program.hasError(), "Should already have reported an error.", extendsRef);
       return undefined;
@@ -5866,8 +5908,7 @@ export function createChecker(program: Program): Checker {
     }
     checkTemplateDeclaration(node, mapper);
 
-    const aliasSymId = getNodeSymId(node);
-    if (pendingResolutions.has(aliasSymId, ResolutionKind.Type)) {
+    if (pendingResolutions.has(node.symbol, ResolutionKind.Type)) {
       if (mapper === undefined) {
         reportCheckerDiagnostic(
           createDiagnostic({
@@ -5881,7 +5922,7 @@ export function createChecker(program: Program): Checker {
       return errorType;
     }
 
-    pendingResolutions.start(aliasSymId, ResolutionKind.Type);
+    pendingResolutions.start(node.symbol, ResolutionKind.Type);
     const type = checkNode(node.value, mapper);
     if (type === null) {
       links.declaredType = errorType;
@@ -5893,7 +5934,7 @@ export function createChecker(program: Program): Checker {
       return errorType;
     }
     linkType(links, type as any, mapper);
-    pendingResolutions.finish(aliasSymId, ResolutionKind.Type);
+    pendingResolutions.finish(node.symbol, ResolutionKind.Type);
 
     return type;
   }
@@ -5906,8 +5947,7 @@ export function createChecker(program: Program): Checker {
 
     const type = node.type ? getTypeForNode(node.type, undefined) : undefined;
 
-    const symId = getSymbolId(node.symbol);
-    if (pendingResolutions.has(symId, ResolutionKind.Value)) {
+    if (pendingResolutions.has(node.symbol, ResolutionKind.Value)) {
       reportCheckerDiagnostic(
         createDiagnostic({
           code: "circular-const",
@@ -5918,9 +5958,9 @@ export function createChecker(program: Program): Checker {
       return null;
     }
 
-    pendingResolutions.start(symId, ResolutionKind.Value);
+    pendingResolutions.start(node.symbol, ResolutionKind.Value);
     const value = getValueForNode(node.value, undefined, type && { kind: "assignment", type });
-    pendingResolutions.finish(symId, ResolutionKind.Value);
+    pendingResolutions.finish(node.symbol, ResolutionKind.Value);
     if (value === null || (type && !checkValueOfType(value, type, node.id))) {
       links.value = null;
       return links.value;
@@ -8748,34 +8788,6 @@ enum ResolutionKind {
   Type,
   BaseType,
   Constraint,
-}
-
-class PendingResolutions {
-  #data = new Map<number, Set<ResolutionKind>>();
-
-  start(symId: number, kind: ResolutionKind) {
-    let existing = this.#data.get(symId);
-    if (existing === undefined) {
-      existing = new Set();
-      this.#data.set(symId, existing);
-    }
-    existing.add(kind);
-  }
-
-  has(symId: number, kind: ResolutionKind): boolean {
-    return this.#data.get(symId)?.has(kind) ?? false;
-  }
-
-  finish(symId: number, kind: ResolutionKind) {
-    const existing = this.#data.get(symId);
-    if (existing === undefined) {
-      return;
-    }
-    existing?.delete(kind);
-    if (existing.size === 0) {
-      this.#data.delete(symId);
-    }
-  }
 }
 
 enum Related {

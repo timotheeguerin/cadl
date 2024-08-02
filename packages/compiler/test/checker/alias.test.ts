@@ -208,6 +208,23 @@ describe("compiler: aliases", () => {
     });
   });
 
+  it("alias referenced back again via a named model shouldn't be a circular reference issue", async () => {
+    testHost.addTypeSpecFile(
+      "main.tsp",
+      `
+      alias A = {
+        b?: B;
+      };
+
+      model B {
+        a?: A;
+      }
+      `
+    );
+    const diagnostics = await testHost.diagnose("main.tsp");
+    expectDiagnosticEmpty(diagnostics);
+  });
+
   it("emit single diagnostics if assign itself as generic and is referenced", async () => {
     testHost.addTypeSpecFile(
       "main.tsp",
