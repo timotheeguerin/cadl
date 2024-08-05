@@ -437,16 +437,24 @@ export function createChecker(program: Program): Checker {
 
     #findCycleStartIndex(sym: Sym, kind: ResolutionKind): number {
       for (let i = this.#stack.length - 1; i >= 0; i--) {
-        const symAtI = this.#stack[i][0];
-        const a = getSymbolLinks(symAtI);
-        // if (symAtI.type ?? a.declaredType) {
-        //   return -1;
-        // }
+        if (this.#resolutionTargetHasProperty(this.#stack[i][0], this.#stack[i][1])) {
+          return -1;
+        }
         if (this.#stack[i][0] === sym && this.#stack[i][1] === kind) {
           return i;
         }
       }
       return -1;
+    }
+
+    #resolutionTargetHasProperty(sym: Sym, kind: ResolutionKind): boolean {
+      const links = getSymbolLinks(sym);
+      switch (kind) {
+        case ResolutionKind.Type:
+          return Boolean(links.declaredType);
+        default:
+          return false;
+      }
     }
 
     has(sym: Sym, kind: ResolutionKind): boolean {
