@@ -1,14 +1,33 @@
-import { mutateModulesInSingleProject } from "@pnpm/core";
-import { createOrConnectStoreController } from "@pnpm/store-connection-manager";
-import { mkdir } from "node:fs/promises";
+import {
+  Cache,
+  Configuration,
+  LightReport,
+  MessageName,
+  Project,
+  stringifyMessageName,
+} from "@yarnpkg/core";
+import { PortablePath } from "@yarnpkg/fslib";
+import nmPlugin from "@yarnpkg/plugin-nm";
+import npmPlugin from "@yarnpkg/plugin-npm";
+import pnpPlugin from "@yarnpkg/plugin-pnp";
+import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 const tspDir = homedir() + "/.tsp";
 
 async function main() {
+  console.log("Oricess", process.argv);
   await install({
     npxCache: tspDir + "/installs",
   });
+
+  const url = pathToFileURL(
+    tspDir + "/installs/node_modules/@typespec/compiler/entrypoints/cli.js",
+  ).href;
+  console.log("Importing", url);
+  await import(url);
+  console.log("Done importing");
 }
 
 main()
@@ -20,41 +39,69 @@ main()
 interface InstallOptions {
   npxCache: string;
 }
+
+const plugins = {
+  "@yarnpkg/plugin-npm": npmPlugin,
+  "@yarnpkg/plugin-nm": nmPlugin,
+  "@yarnpkg/plugin-pnp": pnpPlugin,
+};
 async function install(options: InstallOptions) {
   const installDir = options.npxCache;
   console.log("Downloading compiler into", installDir);
   await mkdir(installDir, { recursive: true });
+  writeFile(
+    installDir + "/package.json",
+    JSON.stringify({ dependencies: { "@typespec/compiler": "latest" } }),
+    "utf8",
+  );
+  // const cli = await getCli({ cwd: installDir as any });
+  // await cli.run(["add", "@typespec/compiler"], cli.defaultContext);
 
-  const storeController = await createOrConnectStoreController({
-    dir: installDir,
-    pnpmHomeDir: tspDir,
-    workspaceDir: installDir,
-    cacheDir: installDir,
-    rawConfig: {},
-    virtualStoreDirMaxLength: Infinity,
-    fetchRetries: 3,
+  const path = installDir as PortablePath;
+  const configuration = await Configuration.find(path, {
+    modules: new Map(Object.entries(plugins)),
+    plugins: new Set(Object.keys(plugins)),
   });
+  configuration.use(`<compat>`, { nodeLinker: `node-modules` }, path, {
+    overwrite: true,
+  });
+  const cache = await Cache.find(configuration);
+  const { project } = await Project.find(configuration, path);
+  await project.restoreInstallState({ restoreResolutions: false });
 
-  await mutateModulesInSingleProject(
+  const report = await ErrorReport.start(
     {
-      mutation: "installSome",
-      dependencySelectors: ["@typespec/compiler"],
-      rootDir: options.npxCache as any,
-      allowNew: true,
-      targetDependenciesField: "dependencies",
-      pruneDirectDependencies: true,
-      manifest: {},
+      configuration,
+      stdout: process.stdout,
     },
-    {
-      storeDir: storeController.dir,
-      storeController: storeController.ctrl,
-      useLockfile: false,
-      saveLockfile: false,
-      fixLockfile: false,
-      lockfileDir: options.npxCache,
-      autoInstallPeers: true,
+    async (report: ErrorReport) => {
+      await project.install({
+        cache,
+        report,
+      });
     },
   );
 
+  if (report.hasErrors()) {
+    throw new Error(report.errorReport);
+  }
   console.log("Done");
+}
+
+class ErrorReport extends LightReport {
+  errors: { name: string; text: string }[] = [];
+
+  static start = (
+    opts: Parameters<typeof LightReport.start>[0],
+    cb: (report: ErrorReport) => Promise<void>,
+  ) => super.start(opts, cb as any) as Promise<ErrorReport>;
+
+  reportError = (name: MessageName, text: string) =>
+    this.errors.push({ name: stringifyMessageName(name), text });
+
+  hasErrors = () => this.errors.length > 0;
+
+  get errorReport() {
+    return this.errors.map((error) => `${error.name} - ${error.text}`).join("\n");
+  }
 }
