@@ -1,7 +1,4 @@
 {
   "main": "bundle.cjs",
-  "output": "sea-prep.blob",
-  "assets": {
-    "reflink.darwin-arm64.node": "reflink.darwin-arm64.node"
-  }
+  "output": "sea-prep.blob"
 }

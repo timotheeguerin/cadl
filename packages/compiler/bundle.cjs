@@ -78777,7 +78777,6 @@ var import_plugin_pnp = __toESM(require_lib11(), 1);
 var import_promises = require("node:fs/promises");
 var import_node_os = require("node:os");
 var import_node_url = require("node:url");
-var import_meta = {};
 var tspDir = (0, import_node_os.homedir)() + "/.tsp";
 async function main() {
   console.log("Oricess", process.argv);
@@ -78787,7 +78786,6 @@ async function main() {
   const url = (0, import_node_url.pathToFileURL)(
     tspDir + "/installs/node_modules/@typespec/compiler/entrypoints/cli.js"
   ).href;
-  console.log("import", import_meta);
   console.log("Importing", url);
   await import(url);
   console.log("Done importing");
